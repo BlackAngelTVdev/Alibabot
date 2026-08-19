@@ -1,0 +1,4 @@
+# Règles de commit de ce dépôt :
+# - Message en français, concis, qui explique le « pourquoi » du changement.
+# - AUCUN footer du type « Generated with ... » / « Co-Authored-By: ... » :
+#   les commits restent propres, sans signature de générateur.
