@@ -12,7 +12,72 @@ const PRESENCE_TYPES = [
   ["invisible", "Invisible"]
 ];
 
-const state = { reactions: [], statuses: [] };
+const state = { reactions: [], statuses: [], discord: null };
+
+// ---- Bannière « Connecte ton compte Discord » ----
+const discordBanner = document.getElementById("discordBanner");
+const discordBannerTitle = document.getElementById("discordBannerTitle");
+const discordBannerText = document.getElementById("discordBannerText");
+const discordConnectBtn = document.getElementById("discordConnectBtn");
+const discordUnlinkBtn = document.getElementById("discordUnlinkBtn");
+
+async function loadDiscordStatus() {
+  try {
+    const response = await apiFetch("/api/discord-status");
+    const data = await response.json();
+    state.discord = data;
+    renderDiscordBanner();
+  } catch (error) {
+    // Session expirée : apiFetch redirige déjà.
+  }
+}
+
+function renderDiscordBanner() {
+  const data = state.discord;
+
+  if (!data) {
+    return;
+  }
+
+  // Les admins n'ont pas besoin de connecter Discord (accès complet).
+  if (data.isAdmin) {
+    discordBanner.style.display = "none";
+    return;
+  }
+
+  if (!data.configured) {
+    discordBanner.style.display = "flex";
+    discordBannerTitle.textContent = "⚠️ Connexion Discord non configurée";
+    discordBannerText.textContent = "L'administrateur doit renseigner DISCORD_CLIENT_ID et DISCORD_CLIENT_SECRET dans le .env pour que les membres puissent se connecter.";
+    discordConnectBtn.style.display = "none";
+    discordUnlinkBtn.style.display = "none";
+    return;
+  }
+
+  discordBanner.style.display = "flex";
+
+  if (data.linked) {
+    discordBannerTitle.textContent = "✅ Connecté : " + (data.discordUsername ?? "Discord");
+    discordBannerText.textContent = "Tu vois les " + (data.discordGuilds ?? 0) + " serveur(s) où tu es. Tu peux y envoyer 1 broadcast par jour.";
+    discordConnectBtn.style.display = "none";
+    discordUnlinkBtn.style.display = "";
+  } else {
+    discordBannerTitle.textContent = "🔗 Connecte ton compte Discord";
+    discordBannerText.textContent = "Pour voir les serveurs où tu es et y envoyer des broadcasts.";
+    discordConnectBtn.style.display = "";
+    discordUnlinkBtn.style.display = "none";
+  }
+}
+
+discordUnlinkBtn.addEventListener("click", async () => {
+  try {
+    await apiFetch("/api/discord-unlink", { method: "POST" });
+    loadDiscordStatus();
+    loadGuilds();
+  } catch (error) {
+    // Ignoré : apiFetch redirige en cas de session expirée.
+  }
+});
 
 // Si la session a expiré, on renvoie vers la page de connexion.
 async function apiFetch(url, options) {
@@ -43,6 +108,10 @@ function activateTab(name) {
 
   if (name === "broadcast") {
     loadGuilds();
+  }
+
+  if (name === "role") {
+    loadChampionRole();
   }
 
   return true;
@@ -631,7 +700,161 @@ const saveNameBtn = document.getElementById("saveNameBtn");
 const botPrefixInput = document.getElementById("botPrefixInput");
 const savePrefixBtn = document.getElementById("savePrefixBtn");
 const persoStatus = document.getElementById("persoStatus");
+const championRoleToggle = document.getElementById("championRoleToggle");
+const championRoleLabel = document.getElementById("championRoleLabel");
+const championRoleNote = document.getElementById("championRoleNote");
+const roleGuildList = document.getElementById("roleGuildList");
+const roleServerCount = document.getElementById("roleServerCount");
+const roleSub = document.getElementById("roleSub");
+const roleStatus = document.getElementById("roleStatus");
 let selectedAvatar = null;
+
+function setRoleStatus(message, kind) {
+  roleStatus.textContent = message;
+  roleStatus.className = "status" + (kind ? " " + kind : "");
+}
+
+// Système « Déclencheur du Jour » : toggle global (perso, admin) + par serveur (onglet rôle).
+async function loadChampionRole() {
+  try {
+    const response = await apiFetch("/api/champion-role");
+    const data = await response.json();
+
+    // Toggle global dans l'onglet perso (réservé à l'admin).
+    if (!data.isAdmin) {
+      championRoleToggle.closest(".perso-row").style.display = "none";
+    } else {
+      championRoleToggle.closest(".perso-row").style.display = "";
+      championRoleToggle.checked = data.enabled;
+      championRoleLabel.textContent = data.enabled ? "Activé (tous les serveurs)" : "Désactivé partout";
+      championRoleNote.textContent = data.enabled
+        ? "Le rôle suit en direct le plus gros déclencheur du jour. Tu peux aussi l'activer/désactiver serveur par serveur dans l'onglet « 👑 rôle »."
+        : "Système coupé partout : aucun rôle n'est créé ni attribué. Réactiver recrée le rôle sur tous les serveurs (sauf ceux désactivés individuellement).";
+    }
+
+    renderRoleServers(data);
+  } catch (error) {
+    // apiFetch redirige déjà en cas de session expirée.
+  }
+}
+
+championRoleToggle.addEventListener("change", async () => {
+  const enabled = championRoleToggle.checked;
+
+  try {
+    const response = await apiFetch("/api/champion-role", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled })
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Impossible de modifier le réglage.");
+    }
+
+    championRoleToggle.checked = data.enabled;
+    championRoleLabel.textContent = data.enabled ? "Activé (tous les serveurs)" : "Désactivé partout";
+    championRoleNote.textContent = data.enabled
+      ? "Le rôle suit en direct le plus gros déclencheur du jour. Tu peux aussi l'activer/désactiver serveur par serveur dans l'onglet « 👑 rôle »."
+      : "Système coupé partout : aucun rôle n'est créé ni attribué. Réactiver recrée le rôle sur tous les serveurs (sauf ceux désactivés individuellement).";
+    setPersoStatus(data.enabled ? "Système « Déclencheur du Jour » activé." : "Système « Déclencheur du Jour » désactivé partout.", "ok");
+    loadChampionRole();
+  } catch (error) {
+    championRoleToggle.checked = !enabled;
+    setPersoStatus(error.message, "bad");
+  }
+});
+
+// Onglet « 👑 rôle » : liste des serveurs visibles avec un switch chacun.
+function renderRoleServers(data) {
+  roleGuildList.innerHTML = "";
+  roleServerCount.textContent = data.servers.length + " serveur" + (data.servers.length > 1 ? "s" : "");
+
+  if (!data.isAdmin) {
+    roleSub.innerHTML = data.linked
+      ? "Active ou désactive le rôle sur <strong>tes serveurs</strong> (ceux où tu es et où le bot est présent)."
+      : "Connecte ton compte Discord (bouton en haut) pour voir <strong>tes serveurs</strong> et pouvoir y activer ou désactiver le rôle.";
+  } else {
+    roleSub.innerHTML = "Active ou désactive le rôle par serveur. Le rôle suit en direct le plus gros déclencheur du jour et change de main si quelqu'un dépasse.";
+  }
+
+  if (data.servers.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+
+    if (data.isAdmin) {
+      empty.textContent = "Le bot n'est sur aucun serveur pour le moment.";
+    } else if (!data.linked) {
+      empty.textContent = "Connecte ton compte Discord pour voir tes serveurs.";
+    } else {
+      empty.textContent = "Tu n'es membre d'aucun serveur où le bot est présent.";
+    }
+
+    roleGuildList.appendChild(empty);
+    return;
+  }
+
+  data.servers.forEach((server) => {
+    const row = document.createElement("div");
+    row.className = "guild-row";
+
+    const info = document.createElement("div");
+    const name = document.createElement("span");
+    name.className = "guild-row-name";
+    name.textContent = server.name;
+    const meta = document.createElement("span");
+    meta.className = "guild-row-meta";
+    meta.textContent = server.memberCount + " membres";
+    info.appendChild(name);
+    info.appendChild(meta);
+
+    const label = document.createElement("label");
+    label.className = "switch";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = server.enabled;
+    const slider = document.createElement("span");
+    slider.className = "switch-slider";
+    const text = document.createElement("span");
+    text.className = "switch-text";
+    text.textContent = server.enabled ? "Activé" : "Désactivé";
+    label.appendChild(input);
+    label.appendChild(slider);
+    label.appendChild(text);
+
+    input.addEventListener("change", async () => {
+      const enabled = input.checked;
+      input.disabled = true;
+
+      try {
+        const response = await apiFetch("/api/champion-role", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ guildId: server.id, enabled })
+        });
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || "Impossible de modifier le réglage.");
+        }
+
+        text.textContent = result.enabled ? "Activé" : "Désactivé";
+        setRoleStatus(result.enabled ? "Rôle activé sur « " + server.name + " »." : "Rôle désactivé sur « " + server.name + " » (rôle retiré).", "ok");
+        loadChampionRole();
+      } catch (error) {
+        input.checked = !enabled;
+        setRoleStatus(error.message, "bad");
+      } finally {
+        input.disabled = false;
+      }
+    });
+
+    row.appendChild(info);
+    row.appendChild(label);
+    roleGuildList.appendChild(row);
+  });
+}
 
 function setPersoStatus(message, kind) {
   persoStatus.textContent = message;
@@ -752,6 +975,131 @@ savePrefixBtn.addEventListener("click", async () => {
   }
 });
 
+// ---- Onglet « reports » ----
+const reportList = document.getElementById("reportList");
+const reportCount = document.getElementById("reportCount");
+const reportSub = document.getElementById("reportSub");
+const reportStatus = document.getElementById("reportStatus");
+
+function setReportStatus(message, kind) {
+  reportStatus.textContent = message;
+  reportStatus.className = "status" + (kind ? " " + kind : "");
+}
+
+function reportDate(timestamp) {
+  return new Date(timestamp).toLocaleString("fr-FR");
+}
+
+async function loadReports() {
+  try {
+    const response = await apiFetch("/api/reports");
+    const data = await response.json();
+
+    reportCount.textContent = String(data.reports.length);
+    reportSub.innerHTML = data.isAdmin
+      ? "Les problèmes signalés via la commande <code>[préfixe]report</code> sur Discord arrivent ici (tous les serveurs)."
+      : data.linked
+        ? "Les problèmes signalés sur <strong>tes serveurs</strong> (via la commande <code>[préfixe]report</code>) arrivent ici."
+        : "Connecte ton compte Discord (bouton en haut) pour voir les reports de tes serveurs.";
+
+    reportList.innerHTML = "";
+
+    if (data.reports.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = data.linked
+        ? "Aucun report pour le moment."
+        : "Connecte ton compte Discord pour voir les reports de tes serveurs.";
+      reportList.appendChild(empty);
+      return;
+    }
+
+    data.reports.forEach((report) => {
+      const row = document.createElement("div");
+      row.className = "report-row" + (report.resolved ? " resolved" : "");
+
+      const head = document.createElement("div");
+      head.className = "report-row-head";
+
+      const info = document.createElement("div");
+      info.className = "report-row-info";
+
+      const title = document.createElement("div");
+      title.className = "report-row-title";
+      title.textContent = (report.resolved ? "✅ Résolu · " : "🛠️ ") + (report.guildName || "Serveur inconnu");
+
+      const meta = document.createElement("div");
+      meta.className = "report-row-meta";
+      meta.textContent = report.authorName + " · " + reportDate(report.createdAt) + (report.channelName ? " · #" + report.channelName : "");
+
+      info.appendChild(title);
+      info.appendChild(meta);
+
+      const actions = document.createElement("div");
+      actions.className = "report-actions";
+
+      const resolveBtn = document.createElement("button");
+      resolveBtn.type = "button";
+      resolveBtn.className = "pill secondary small";
+      resolveBtn.textContent = report.resolved ? "Rouvrir" : "Résolu";
+      resolveBtn.addEventListener("click", async () => {
+        try {
+          const res = await apiFetch("/api/reports/" + encodeURIComponent(report.id), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ resolved: !report.resolved })
+          });
+          const result = await res.json();
+          if (!res.ok) {
+            throw new Error(result.error || "Erreur");
+          }
+          setReportStatus(report.resolved ? "Report rouvert." : "Report marqué résolu.", "ok");
+          loadReports();
+        } catch (error) {
+          setReportStatus(error.message, "bad");
+        }
+      });
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "pill secondary small danger";
+      deleteBtn.textContent = "Supprimer";
+      deleteBtn.addEventListener("click", async () => {
+        if (!confirm("Supprimer ce report ?")) {
+          return;
+        }
+
+        try {
+          const res = await apiFetch("/api/reports/" + encodeURIComponent(report.id), { method: "DELETE" });
+          const result = await res.json();
+          if (!res.ok) {
+            throw new Error(result.error || "Erreur");
+          }
+          setReportStatus("Report supprimé.", "ok");
+          loadReports();
+        } catch (error) {
+          setReportStatus(error.message, "bad");
+        }
+      });
+
+      actions.appendChild(resolveBtn);
+      actions.appendChild(deleteBtn);
+      head.appendChild(info);
+      head.appendChild(actions);
+      row.appendChild(head);
+
+      const content = document.createElement("div");
+      content.className = "report-row-content";
+      content.textContent = report.content;
+      row.appendChild(content);
+
+      reportList.appendChild(row);
+    });
+  } catch (error) {
+    setReportStatus(error.message, "bad");
+  }
+}
+
 // ---- Onglet « logs » (admin) ----
 const logTableWrap = document.getElementById("logTableWrap");
 const logCount = document.getElementById("logCount");
@@ -824,9 +1172,10 @@ async function loadLogs() {
 
 setInterval(loadLogs, 10000);
 
-// ---- Onglet « broadcast » (admin) ----
+// ---- Onglet « broadcast » ----
 const broadcastTab = document.getElementById("broadcastTab");
 const broadcastGuildCount = document.getElementById("broadcastGuildCount");
+const broadcastSub = document.getElementById("broadcastSub");
 const guildList = document.getElementById("guildList");
 const embedPreview = document.getElementById("embedPreview");
 const broadcastStatus = document.getElementById("broadcastStatus");
@@ -1201,11 +1550,20 @@ async function loadGuilds() {
     broadcastGuildCount.textContent = count + " serveur" + (count > 1 ? "s" : "");
     guildList.innerHTML = "";
 
-    // Remplit le sélecteur de cible (par défaut : tous les serveurs).
+    // Comptes non-admin : on rappelle qu'ils ne voient que leurs serveurs.
+    if (!data.isAdmin) {
+      broadcastSub.innerHTML = data.linked
+        ? "Construis un embed et envoie-le sur <strong>tes serveurs</strong> (ceux où tu es, via ton compte Discord). Il atterrit dans le salon système, sinon un salon « general », sinon le premier salon où le bot peut écrire."
+        : "Connecte ton compte Discord (bouton en haut) pour voir <strong>tes serveurs</strong> et pouvoir envoyer un broadcast dessus.";
+    } else {
+      broadcastSub.innerHTML = "Construis un embed (avec boutons si tu veux) et envoie-le sur <strong>tous les serveurs</strong> où le bot est présent. Il atterrit dans le salon système, sinon un salon « general », sinon le premier salon où le bot peut écrire.";
+    }
+
+    // Remplit le sélecteur de cible (par défaut : tous les serveurs visibles).
     bcTarget.innerHTML = "";
     const allOption = document.createElement("option");
     allOption.value = "all";
-    allOption.textContent = "🌍 Tous les serveurs";
+    allOption.textContent = data.isAdmin ? "🌍 Tous les serveurs" : "🌍 Tous mes serveurs";
     bcTarget.appendChild(allOption);
     broadcast.guilds.forEach((guild) => {
       const option = document.createElement("option");
@@ -1217,11 +1575,19 @@ async function loadGuilds() {
     if (count === 0) {
       const empty = document.createElement("div");
       empty.className = "empty";
-      empty.textContent = "Le bot n'est sur aucun serveur pour le moment.";
+
+      if (data.isAdmin) {
+        empty.textContent = "Le bot n'est sur aucun serveur pour le moment.";
+      } else if (!data.linked) {
+        empty.textContent = "Connecte ton compte Discord pour voir tes serveurs.";
+      } else {
+        empty.textContent = "Tu n'es membre d'aucun serveur où le bot est présent.";
+      }
+
       guildList.appendChild(empty);
 
-      // Le bot peut encore être en train de se connecter : on réessaie quelques fois.
-      if (guildRetryCount < 6) {
+      // Le bot peut encore être en train de se connecter : on réessaie quelques fois (admin).
+      if (data.isAdmin && guildRetryCount < 6) {
         guildRetryCount += 1;
         setTimeout(loadGuilds, 5000);
       }
@@ -1271,6 +1637,8 @@ document.getElementById("bcColor").addEventListener("input", renderBroadcastPrev
 
 // ---- Chargement initial ----
 async function loadAll() {
+  loadDiscordStatus();
+
   try {
     const reactionsResponse = await apiFetch("/api/reactions");
     const reactionsData = await reactionsResponse.json();
@@ -1293,6 +1661,8 @@ async function loadAll() {
   loadBotInfo();
   loadLogs();
   loadGuilds();
+  loadChampionRole();
+  loadReports();
 }
 
 document.getElementById("logoutBtn").addEventListener("click", async () => {

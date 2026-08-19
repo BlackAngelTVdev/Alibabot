@@ -20,11 +20,24 @@
         <button class="pill secondary" type="button" id="logoutBtn">Se déconnecter</button>
       </header>
 
+      <div class="discord-banner" id="discordBanner" style="display:none;">
+        <div class="discord-banner-text">
+          <strong id="discordBannerTitle">🔗 Connecte ton compte Discord</strong>
+          <p id="discordBannerText">Pour voir les serveurs où tu es et y envoyer des broadcasts.</p>
+        </div>
+        <div class="actions">
+          <a class="pill primary" id="discordConnectBtn" href="/api/oauth/start">Connecter Discord</a>
+          <button class="pill secondary" type="button" id="discordUnlinkBtn" style="display:none;">Déconnecter</button>
+        </div>
+      </div>
+
       <nav class="tabs">
         <div class="tab active" data-tab="reactions">💬 réactions</div>
         <div class="tab" data-tab="status">🔄 status</div>
         <div class="tab" data-tab="broadcast" id="broadcastTab">📣 broadcast</div>
+        <div class="tab" data-tab="role">👑 rôle</div>
         <div class="tab" data-tab="perso">🎨 perso</div>
+        <div class="tab" data-tab="reports">📨 reports</div>
         <div class="tab" data-tab="compte" id="compteTab">👥 compte</div>
         <div class="tab" data-tab="logs" id="logsTab">📜 logs</div>
       </nav>
@@ -48,7 +61,7 @@
       <section class="tab-content" id="tab-broadcast">
         <div class="card">
           <h2>Broadcast <span class="count-badge" id="broadcastGuildCount">0 serveur</span></h2>
-          <p class="sub">Construis un embed (avec boutons si tu veux) et envoie-le sur <strong>tous les serveurs</strong> où le bot est présent. Il atterrit dans le salon système, sinon un salon « general », sinon le premier salon où le bot peut écrire.</p>
+          <p class="sub" id="broadcastSub">Construis un embed (avec boutons si tu veux) et envoie-le sur <strong>tous les serveurs</strong> où le bot est présent. Il atterrit dans le salon système, sinon un salon « general », sinon le premier salon où le bot peut écrire.</p>
 
           <div class="broadcast-grid">
             <div class="broadcast-form">
@@ -112,7 +125,7 @@
                 <button class="pill secondary" type="button" id="clearBroadcastBtn">Tout effacer</button>
                 <button class="pill primary" type="button" id="sendBroadcastBtn">📣 Envoyer sur tous les serveurs</button>
               </div>
-              <p class="sub-note">💡 Comptes normaux : <strong>1 envoi par jour</strong>. Les admins ne sont pas limités.</p>
+              <p class="sub-note">💡 Comptes normaux : <strong>1 envoi par jour</strong>, uniquement sur leurs serveurs (compte Discord connecté). Les admins ne sont pas limités.</p>
             </div>
 
             <div class="broadcast-preview">
@@ -123,6 +136,15 @@
           </div>
 
           <div class="status" id="broadcastStatus"></div>
+        </div>
+      </section>
+
+      <section class="tab-content" id="tab-role">
+        <div class="card">
+          <h2>Rôle « 👑 Déclencheur du Jour » <span class="count-badge" id="roleServerCount">0 serveur</span></h2>
+          <p class="sub" id="roleSub">Active ou désactive le rôle par serveur. Le rôle suit en direct le plus gros déclencheur du jour et change de main si quelqu'un dépasse.</p>
+          <div class="guild-list" id="roleGuildList"></div>
+          <div class="status" id="roleStatus"></div>
         </div>
       </section>
 
@@ -137,6 +159,15 @@
             <button class="pill primary" type="button" id="saveStatusBtn">Enregistrer les statuts</button>
           </div>
           <div class="status" id="statusMessage"></div>
+        </div>
+      </section>
+
+      <section class="tab-content" id="tab-reports">
+        <div class="card">
+          <h2>Rapports <span class="count-badge" id="reportCount">0</span></h2>
+          <p class="sub" id="reportSub">Les problèmes signalés via la commande <code>[préfixe]report</code> sur Discord arrivent ici.</p>
+          <div class="reports-list" id="reportList"></div>
+          <div class="status" id="reportStatus"></div>
         </div>
       </section>
 
@@ -189,6 +220,20 @@
                 <button class="pill primary" type="button" id="savePrefixBtn">Changer le préfixe</button>
               </div>
               <p class="sub-note">La commande <strong>[préfixe]stats</strong> (ex. : <code>!stats</code>) affiche un embed Discord avec le nombre de réponses du bot pour chaque réaction.</p>
+            </div>
+          </div>
+
+          <div class="perso-row">
+            <div class="perso-info">
+              <p>Rôle « 👑 Déclencheur du Jour » :</p>
+              <div class="add-row">
+                <label class="switch">
+                  <input type="checkbox" id="championRoleToggle" />
+                  <span class="switch-slider"></span>
+                  <span id="championRoleLabel">Chargement…</span>
+                </label>
+              </div>
+              <p class="sub-note" id="championRoleNote">Quand c'est activé, le rôle suit en direct le plus gros déclencheur du jour sur chaque serveur. Désactiver retire le rôle partout et arrête le système.</p>
             </div>
           </div>
 
