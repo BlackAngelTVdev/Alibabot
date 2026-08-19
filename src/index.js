@@ -212,11 +212,33 @@ client.on("messageCreate", async (message) => {
 });
 
 client.on("interactionCreate", async (interaction) => {
-  if (!interaction.isButton()) {
+  const customId = String(interaction.customId ?? "");
+
+  // Soumission du popup « Signaler un problème » : on enregistre le report.
+  // (Un modal est une interaction « modal submit », pas un bouton — à traiter d'abord.)
+  if (interaction.isModalSubmit() && customId === "report:submit") {
+    try {
+      const content = interaction.fields.getTextInputValue("report:content")?.trim() ?? "";
+
+      if (content.length < 10) {
+        await interaction.reply({ content: "Ton message est trop court (min. 10 caractères).", ephemeral: true });
+        return;
+      }
+
+      createReportFromModal(interaction.guild, interaction.channel, interaction.user, content);
+      await interaction.reply({
+        content: "✅ Merci ! Ton signalement a bien été transmis à l'équipe.",
+        ephemeral: true
+      });
+    } catch {
+      // Interaction déjà traitée ou expirée : on ignore.
+    }
     return;
   }
 
-  const customId = String(interaction.customId ?? "");
+  if (!interaction.isButton()) {
+    return;
+  }
 
   // Boutons de consentement (classement public) : on enregistre le choix et on retire les boutons.
   if (customId.startsWith("consent:")) {
@@ -255,27 +277,6 @@ client.on("interactionCreate", async (interaction) => {
 
       modal.addComponents(new ActionRowBuilder().addComponents(contentInput));
       await interaction.showModal(modal);
-    } catch {
-      // Interaction déjà traitée ou expirée : on ignore.
-    }
-    return;
-  }
-
-  // Soumission du popup : on enregistre le report.
-  if (customId === "report:submit") {
-    try {
-      const content = interaction.fields.getTextInputValue("report:content")?.trim() ?? "";
-
-      if (content.length < 10) {
-        await interaction.reply({ content: "Ton message est trop court (min. 10 caractères).", ephemeral: true });
-        return;
-      }
-
-      createReportFromModal(interaction.guild, interaction.channel, interaction.user, content);
-      await interaction.reply({
-        content: "✅ Merci ! Ton signalement a bien été transmis à l'équipe.",
-        ephemeral: true
-      });
     } catch {
       // Interaction déjà traitée ou expirée : on ignore.
     }
