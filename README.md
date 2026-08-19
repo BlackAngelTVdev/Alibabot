@@ -41,12 +41,19 @@ Une **page publique** `/stats` (sans connexion) affiche les déclencheurs les pl
 
 Chaque réponse du bot est comptée par réaction. Le **4 mai** de chaque année, le bot envoie un **rapport annuel** sur tous les serveurs (total de déclenchements, top réaction, top personne, top serveur et remerciement) — une seule fois par an, même s'il redémarre ce jour-là.
 
+### 👑 Déclencheur du Jour
+
+Chaque jour, sur chaque serveur, la personne qui a le plus déclenché le bot reçoit le rôle **« 👑 Déclencheur du Jour »** (couleur or, affiché à part dans la liste des membres → pseudo coloré). Le rôle est créé automatiquement s'il n'existe pas. Au changement de jour (minuit), le nouveau champion est couronné et le comptage repart de zéro. Si le bot redémarre, le rôle est retiré partout et le comptage recommence (tout est en mémoire, rien en base). Si la hiérarchie des rôles bloque (rôle du bot trop bas, permission « Gérer les rôles » absente), le bot envoie un message privé au propriétaire du serveur (ou à un admin) pour expliquer quoi déplacer. Nécessite l'intent **Server Members** dans le portail développeur Discord.
+
+Le système peut être **désactivé** dans le panneau : l'onglet **👑 rôle** liste les serveurs (ceux où tu es, si tu as connecté ton compte Discord) avec un interrupteur chacun — les **membres** peuvent ainsi l'activer/désactiver sur leurs serveurs, et l'**admin** voit tous les serveurs + un interrupteur global dans l'onglet **perso**. Désactiver un serveur retire le rôle sur place et arrête le suivi ; réactiver recrée le rôle.
+
 Les commandes (préfixe modifiable dans l'onglet **perso**) :
 - `[préfixe]stats` (ex. : `!stats`) : envoie le lien vers la page publique des statistiques (`PUBLIC_URL`/stats) ;
 - `[préfixe]pp` (ex. : `!pp`) : envoie un lien de téléchargement de la photo de profil de l'auteur ; `[préfixe]pp @user` : celle du user taggé ;
 - `[préfixe]invite` (ex. : `!invite`) : envoie un lien pour inviter le bot sur un autre serveur ;
 - `[préfixe]consent` (ex. : `!consent`) : affiche son statut de consentement pour le classement public ; `[préfixe]consent oui` / `[préfixe]consent non` permet de changer d'avis à tout moment (ça marche aussi en message privé) ;
 - `[préfixe]help` (ex. : `!help`) : liste toutes les commandes avec le préfixe courant ;
+- `[préfixe]report` (ex. : `!report`) : ouvre un popup (modal) pour signaler un problème — le report est envoyé au panneau (onglet **📨 reports**), visible par l'admin et par les membres liés Discord sur les serveurs concernés ;
 - `[préfixe]codesource` (ex. : `!codesource`) : lien vers le code source du bot.
 
 ### Seeder (données d'exemple)
@@ -59,6 +66,21 @@ npm run seed -- --reset  # remplace TOUTES les réactions par les exemples (dest
 ```
 
 Si tu vois l'erreur `Used disallowed intents`, c'est que l'intent **Message Content** n'est pas encore activé dans le portail Discord. Sans lui, le bot ne peut pas lire le contenu des messages et ne peut pas détecter `quoi`.
+
+### Connexion Discord des membres (broadcast limité à leurs serveurs)
+
+Pour que les comptes non-admin puissent envoyer des broadcasts **uniquement sur les serveurs dont ils sont membres**, chaque membre connecte son compte Discord :
+
+1. Dans le portail développeur Discord, ouvre ton application (celle du bot) → onglet **OAuth2** → **General** : note le **Client ID** et crée un **Client Secret**.
+2. Ajoute l'URL de redirection **`<PUBLIC_URL>/api/oauth/callback`** (ex. `https://quoi.laxacube.ch/api/oauth/callback`) dans **OAuth2 → Redirects**, ainsi que `http://localhost:30000/api/oauth/callback` pour tester en local.
+3. Renseigne dans `.env` :
+
+```
+DISCORD_CLIENT_ID=…
+DISCORD_CLIENT_SECRET=…
+```
+
+Une fois connectés, les membres ne voient que leurs serveurs dans l'onglet **broadcast** (et l'envoi y est restreint, 1/jour). Les **admins** gardent l'accès complet sans connexion Discord.
 
 ## Sécurité de l'interface web
 
