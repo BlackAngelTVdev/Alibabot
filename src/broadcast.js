@@ -276,8 +276,10 @@ export async function sendToAllGuilds(payload) {
   return sendPayloadToGuilds(payload, guilds);
 }
 
-// Envoie l'embed : sur tous les serveurs par défaut, ou sur un serveur précis si guildId est fourni.
-export async function broadcastToGuilds(spec, guildId = null) {
+// Envoie l'embed : sur tous les serveurs par défaut, ou sur un serveur précis si guildId
+// est fourni. allowedGuildIds restreint l'envoi à une liste de serveurs (comptes non-admin :
+// uniquement les serveurs dont l'utilisateur est membre).
+export async function broadcastToGuilds(spec, guildId = null, allowedGuildIds = null) {
   const client = getBotClient();
 
   if (!client?.user) {
@@ -287,11 +289,16 @@ export async function broadcastToGuilds(spec, guildId = null) {
   const payload = buildBroadcastPayload(spec);
   let guilds = await fetchGuilds();
 
+  if (Array.isArray(allowedGuildIds) && allowedGuildIds.length > 0) {
+    const allowed = new Set(allowedGuildIds);
+    guilds = guilds.filter((entry) => allowed.has(entry.id));
+  }
+
   if (guildId) {
     const guild = guilds.find((entry) => entry.id === guildId);
 
     if (!guild) {
-      throw new Error("Serveur introuvable (le bot n'y est pas).");
+      throw new Error("Serveur introuvable (le bot n'y est pas, ou tu n'es pas membre).");
     }
 
     guilds = [guild];

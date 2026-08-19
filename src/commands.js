@@ -1,4 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, PermissionsBitField } from "discord.js";
+import { addReport } from "./reports.js";
 import { getBotClient } from "./bot.js";
 import { readBotPrefix } from "./botConfig.js";
 import { ensureUserStat, setUserConsent } from "./userStats.js";
@@ -179,6 +180,40 @@ export async function handleConsentCommand(message) {
   return true;
 }
 
+// Commande de report : répond avec un bouton qui ouvre le popup (modal) de signalement.
+export async function handleReportCommand(message) {
+  const rest = commandRest(message);
+
+  if (rest !== "report") {
+    return false;
+  }
+
+  await message.reply({
+    content: "🛠️ Un problème, un bug ou une remarque ? Clique sur le bouton ci-dessous, écris ton message et il sera transmis à l'équipe.",
+    components: [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("report:open")
+          .setLabel("📝 Signaler un problème")
+          .setStyle(ButtonStyle.Danger)
+      )
+    ]
+  });
+  return true;
+}
+
+// Enregistre un report venu du popup (modal) et retourne le report créé.
+export function createReportFromModal(guild, channel, author, content) {
+  return addReport({
+    guildId: guild?.id ?? "",
+    guildName: guild?.name ?? "MP",
+    channelName: channel?.name ?? "MP",
+    authorId: author.id,
+    authorName: author.username,
+    content
+  });
+}
+
 // Commande d'aide : liste toutes les commandes avec le préfixe courant.
 export async function handleHelpCommand(message) {
   const rest = commandRest(message);
@@ -200,6 +235,7 @@ export async function handleHelpCommand(message) {
     ["stats", "Lien vers la page publique des statistiques et des classements."],
     ["pp", `Télécharge ta photo de profil (${prefix}pp @user pour celle d'un autre).`],
     ["invite", "Lien pour m'inviter sur un autre serveur."],
+    ["report", "Ouvre un popup pour signaler un problème (transmis à l'équipe)."],
     ["consent", `Voir ton statut de consentement pour le classement public (${prefix}consent oui / ${prefix}consent non pour changer d'avis).`],
     ["codesource", "Lien vers le code source du bot."],
     ["help", "Cette aide."]

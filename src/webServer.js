@@ -28,8 +28,22 @@ import {
 } from "./db.js";
 import { readBotPrefix, writeBotPrefix } from "./botConfig.js";
 import { broadcastToGuilds, canBroadcast, listGuilds, markBroadcastUsed, nextBroadcastDelayMs } from "./broadcast.js";
+import { buildAuthorizeUrl, clearDiscordLink, consumeOAuthState, exchangeCode, fetchDiscordIdentity, getDiscordLink, isOAuthConfigured, setDiscordLink, userGuilds } from "./discordOAuth.js";
+import {
+  championRoleGuilds,
+  ensureChampionRole,
+  ensureChampionRoleEverywhere,
+  isChampionRoleEnabled,
+  removeChampionRoleEverywhere,
+  removeChampionRoleOnGuild,
+  resetChampionTracking,
+  resetChampionTrackingForGuild,
+  setChampionRoleEnabled,
+  setChampionRoleEnabledForGuild
+} from "./dailyChampion.js";
 import { dailyStats } from "./dailyStats.js";
 import { createReaction, deleteReaction, readReactions, updateReaction } from "./reactions.js";
+import { deleteReport, getReport, listReports, setReportResolved } from "./reports.js";
 import { publicUserLeaderboard } from "./userStats.js";
 import { readBotStatusConfig, writeBotStatusConfig } from "./statusConfig.js";
 
@@ -194,6 +208,33 @@ export async function startWebServer() {
       return;
     }
 
+    // ---- Connexion Discord (OAuth2) : retour de Discord après autorisation ----
+    if (request.method === "GET" && pathname === "/api/oauth/callback") {
+      const code = url.searchParams.get("code");
+      const state = url.searchParams.get("state");
+      const username = consumeOAuthState(state);
+
+      if (!code || !username) {
+        response.writeHead(302, { Location: "/login" });
+        response.end();
+        return;
+      }
+
+      exchangeCode(code)
+        .then(fetchDiscordIdentity)
+        .then((identity) => {
+          setDiscordLink(username, identity);
+          addLog(username, "compte Discord lié", `${identity.username} (${identity.guilds.length} serveurs)`);
+          response.writeHead(302, { Location: "/" });
+          response.end();
+        })
+        .catch(() => {
+          response.writeHead(302, { Location: "/login?oauth=error" });
+          response.end();
+        });
+      return;
+    }
+
     // ---- Routes publiques (sans session) ----
     if (request.method === "GET" && (pathname === "/favicon" || pathname === "/favicon.ico")) {
       // Favicon = l'avatar actuel du bot. Redirection vers le CDN Discord : l'URL change
@@ -282,6 +323,143 @@ export async function startWebServer() {
     // ---- Gestion des utilisateurs (réservée à l'admin) ----
     const currentUsername = getSessionUsername(sessionToken);
     const currentUser = getUser(currentUsername);
+    const currentIsAdmin = Boolean(currentUser?.isAdmin);
+
+    // ---- Connexion Discord (OAuth2) : début du flux ----
+    if (request.method === "GET" && pathname === "/api/oauth/start") {
+      if (!isOAuthConfigured()) {
+        response.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+        response.end(JSON.stringify({ error: "La connexion Discord n'est pas configurée (DISCORD_CLIENT_ID / DISCORD_CLIENT_SECRET manquants)." }));
+        return;
+      }
+
+      response.writeHead(302, { Location: buildAuthorizeUrl(currentUsername) });
+      response.end();
+      return;
+    }
+
+    // ---- Système « Déclencheur du Jour » (rôle) ----
+    // GET : état global + état par serveur, pour les serveurs visibles par l'utilisateur
+    // (admins : tous ; membres : ceux où ils sont, recoupés avec ceux du bot).
+    if (request.method === "GET" && pathname === "/api/champion-role") {
+      listGuilds()
+        .then((botGuilds) => {
+          const visible = currentIsAdmin ? botGuilds : userGuilds(currentUsername, botGuilds);
+          const guildStates = championRoleGuilds();
+
+          response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+          response.end(JSON.stringify({
+            enabled: isChampionRoleEnabled(),
+            isAdmin: currentIsAdmin,
+            linked: currentIsAdmin || Boolean(getDiscordLink(currentUsername)),
+            servers: visible.map((guild) => ({
+              id: guild.id,
+              name: guild.name,
+              memberCount: guild.memberCount ?? 0,
+              enabled: isChampionRoleEnabled(guild.id),
+              custom: Object.prototype.hasOwnProperty.call(guildStates, guild.id)
+            }))
+          }));
+        })
+        .catch((error) => {
+          response.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+          response.end(JSON.stringify({ error: error.message }));
+        });
+      return;
+    }
+
+    // POST sans guildId : interrupteur global (réservé à l'admin).
+    // POST avec guildId : interrupteur sur un serveur précis (admin ou membre de ce serveur).
+    if (request.method === "POST" && pathname === "/api/champion-role") {
+      readJsonBody(request)
+        .then(async (parsed) => {
+          const guildId = String(parsed?.guildId ?? "").trim();
+          const enabled = parsed?.enabled !== false;
+
+          if (!guildId) {
+            if (!currentIsAdmin) {
+              throw new Error("Réservé à l'administrateur.");
+            }
+
+            setChampionRoleEnabled(enabled);
+
+            if (enabled) {
+              await ensureChampionRoleEverywhere();
+              addLog(currentUsername, "système Déclencheur du Jour activé");
+            } else {
+              await removeChampionRoleEverywhere();
+              resetChampionTracking();
+              addLog(currentUsername, "système Déclencheur du Jour désactivé");
+            }
+
+            response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+            response.end(JSON.stringify({ ok: true, enabled }));
+            return;
+          }
+
+          // Interrupteur sur un serveur précis.
+          const botGuilds = await listGuilds();
+          const guild = botGuilds.find((entry) => entry.id === guildId);
+
+          if (!guild) {
+            throw new Error("Serveur introuvable (le bot n'y est pas).");
+          }
+
+          if (!currentIsAdmin) {
+            const link = getDiscordLink(currentUsername);
+
+            if (!link || !link.guilds.some((entry) => entry.id === guildId)) {
+              throw new Error("Tu n'es pas membre de ce serveur.");
+            }
+          }
+
+          setChampionRoleEnabledForGuild(guildId, enabled);
+
+          if (enabled) {
+            const fullGuild = getBotClient()?.guilds.cache.get(guildId);
+            if (fullGuild) {
+              await ensureChampionRole(fullGuild);
+            }
+            addLog(currentUsername, "rôle Déclencheur du Jour activé", guild.name);
+          } else {
+            const fullGuild = getBotClient()?.guilds.cache.get(guildId);
+            if (fullGuild) {
+              await removeChampionRoleOnGuild(fullGuild);
+            }
+            resetChampionTrackingForGuild(guildId);
+            addLog(currentUsername, "rôle Déclencheur du Jour désactivé", guild.name);
+          }
+
+          response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+          response.end(JSON.stringify({ ok: true, enabled, guildId }));
+        })
+        .catch((error) => {
+          response.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+          response.end(JSON.stringify({ error: error.message }));
+        });
+      return;
+    }
+
+    if (request.method === "GET" && pathname === "/api/discord-status") {
+      const link = getDiscordLink(currentUsername);
+      response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+      response.end(JSON.stringify({
+        configured: isOAuthConfigured(),
+        isAdmin: currentIsAdmin,
+        linked: Boolean(link),
+        discordUsername: link?.username ?? null,
+        discordGuilds: link?.guilds?.length ?? 0
+      }));
+      return;
+    }
+
+    if (request.method === "POST" && pathname === "/api/discord-unlink") {
+      clearDiscordLink(currentUsername);
+      addLog(currentUsername, "compte Discord délié");
+      response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      response.end(JSON.stringify({ ok: true }));
+      return;
+    }
 
     if (request.method === "GET" && pathname === "/api/users") {
       if (!currentUser?.isAdmin) {
@@ -463,11 +641,14 @@ export async function startWebServer() {
     if (request.method === "GET" && pathname === "/api/guilds") {
       listGuilds()
         .then((guilds) => {
+          // Les admins voient tous les serveurs du bot ; les autres uniquement
+          // ceux dont ils sont membres (via leur compte Discord lié).
+          const visible = currentIsAdmin ? guilds : userGuilds(currentUsername, guilds);
           response.writeHead(200, {
             "Content-Type": "application/json; charset=utf-8",
             "Cache-Control": "no-store"
           });
-          response.end(JSON.stringify({ guilds }));
+          response.end(JSON.stringify({ guilds: visible, isAdmin: currentIsAdmin, linked: currentIsAdmin || Boolean(getDiscordLink(currentUsername)) }));
         })
         .catch((error) => {
           response.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
@@ -481,13 +662,27 @@ export async function startWebServer() {
 
       readJsonBody(request)
         .then(async (parsed) => {
-          // Les comptes normaux sont limités à un envoi par jour ; les admins, non.
-          if (!isAdmin && !canBroadcast(currentUsername)) {
-            const hours = Math.ceil(nextBroadcastDelayMs(currentUsername) / 3_600_000);
-            throw new Error(`Tu as déjà envoyé un broadcast aujourd'hui. Réessaie dans ${hours} h.`);
+          // Les comptes normaux : limités à 1 envoi/jour, et seulement sur leurs serveurs.
+          if (!isAdmin) {
+            if (!getDiscordLink(currentUsername)) {
+              throw new Error("Connecte d'abord ton compte Discord (bouton en haut) pour envoyer un broadcast.");
+            }
+
+            if (!canBroadcast(currentUsername)) {
+              const hours = Math.ceil(nextBroadcastDelayMs(currentUsername) / 3_600_000);
+              throw new Error(`Tu as déjà envoyé un broadcast aujourd'hui. Réessaie dans ${hours} h.`);
+            }
           }
 
-          const result = await broadcastToGuilds(parsed, parsed?.guildId);
+          // Les non-admins n'ont accès qu'à leurs serveurs : on restreint l'envoi.
+          const memberGuildIds = isAdmin ? null : (getDiscordLink(currentUsername)?.guilds ?? []).map((guild) => guild.id);
+
+          // Un non-admin qui n'est sur aucun serveur du bot ne doit pas voir « tous ».
+          if (!isAdmin && parsed?.guildId === null && memberGuildIds.length === 0) {
+            throw new Error("Tu n'es membre d'aucun serveur où le bot est présent.");
+          }
+
+          const result = await broadcastToGuilds(parsed, parsed?.guildId, memberGuildIds);
 
           // On ne consomme le quota que si au moins un serveur a réellement reçu le message.
           if (!isAdmin && result.sent > 0) {
@@ -514,6 +709,93 @@ export async function startWebServer() {
 
       response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
       response.end(JSON.stringify({ logs: getLogs(100) }));
+      return;
+    }
+
+    // ---- Rapports « problème » (reports) ----
+    // GET : l'admin voit tout ; les membres voient uniquement les reports des serveurs
+    // où ils sont (via leur compte Discord lié).
+    if (request.method === "GET" && pathname === "/api/reports") {
+      const allReports = listReports();
+
+      let visible = allReports;
+
+      if (!currentIsAdmin) {
+        const link = getDiscordLink(currentUsername);
+
+        if (!link) {
+          visible = [];
+        } else {
+          const memberIds = new Set(link.guilds.map((guild) => guild.id));
+          visible = allReports.filter((report) => memberIds.has(report.guildId));
+        }
+      }
+
+      response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+      response.end(JSON.stringify({ reports: visible, isAdmin: currentIsAdmin, linked: currentIsAdmin || Boolean(getDiscordLink(currentUsername)) }));
+      return;
+    }
+
+    const reportMatch = pathname.match(/^\/api\/reports\/([^/]+)$/);
+
+    if (request.method === "DELETE" && reportMatch) {
+      const reportId = decodeURIComponent(reportMatch[1]);
+      const report = getReport(reportId);
+
+      if (!report) {
+        response.writeHead(404, { "Content-Type": "application/json; charset=utf-8" });
+        response.end(JSON.stringify({ error: "Report introuvable." }));
+        return;
+      }
+
+      // Seul l'admin (ou l'auteur du report) peut le supprimer.
+      const link = getDiscordLink(currentUsername);
+      const isAuthor = link?.id === report.authorId;
+
+      if (!currentIsAdmin && !isAuthor) {
+        response.writeHead(403, { "Content-Type": "application/json; charset=utf-8" });
+        response.end(JSON.stringify({ error: "Tu ne peux pas supprimer ce report." }));
+        return;
+      }
+
+      deleteReport(reportId);
+      addLog(currentUsername, "report supprimé", reportId);
+      response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      response.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
+    if (request.method === "POST" && reportMatch) {
+      const reportId = decodeURIComponent(reportMatch[1]);
+      const report = getReport(reportId);
+
+      if (!report) {
+        response.writeHead(404, { "Content-Type": "application/json; charset=utf-8" });
+        response.end(JSON.stringify({ error: "Report introuvable." }));
+        return;
+      }
+
+      // Marquer résolu/non résolu : admin ou auteur.
+      const link = getDiscordLink(currentUsername);
+      const isAuthor = link?.id === report.authorId;
+
+      if (!currentIsAdmin && !isAuthor) {
+        response.writeHead(403, { "Content-Type": "application/json; charset=utf-8" });
+        response.end(JSON.stringify({ error: "Tu ne peux pas modifier ce report." }));
+        return;
+      }
+
+      readJsonBody(request)
+        .then((parsed) => {
+          const updated = setReportResolved(reportId, parsed?.resolved === true);
+          addLog(currentUsername, "report modifié", parsed?.resolved === true ? "résolu" : "rouvert");
+          response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+          response.end(JSON.stringify({ ok: true, report: updated }));
+        })
+        .catch((error) => {
+          response.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+          response.end(JSON.stringify({ error: error.message }));
+        });
       return;
     }
 
