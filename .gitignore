@@ -1,0 +1,24 @@
+# Dépendances
+node_modules/
+
+# Secrets (jamais versionner : token Discord, mots de passe)
+.env
+.env.*
+
+# Base de données (contient les comptes et les stats)
+users.db
+users.db.*
+*.db
+*.db-journal
+
+# Fichiers temporaires / de test locaux
+tmp-*
+/tmp/
+*.log
+
+# Sauvegardes de migration
+*.bak
+
+# Fichiers de l'agent / IDE
+.freebuff/
+.DS_Store

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/png" href="/favicon" />
+    <title>Stats du bot</title>
+    <link rel="stylesheet" href="/style-@@ASSET_VERSION@@.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="topbar">
+        <div class="brand">
+          <div>
+            <h1 id="pageTitle">📊 Stats du bot</h1>
+            <p class="brand-sub">Classements publics — mis à jour en direct</p>
+          </div>
+        </div>
+        <a class="pill secondary" href="/">Panneau de gestion</a>
+      </header>
+
+      <section class="card">
+        <h2>🏆 Déclencheurs les plus utilisés</h2>
+        <p class="sub">Les mots qui font le plus réagir le bot.</p>
+        <div class="board" id="triggerBoard"></div>
+      </section>
+
+      <section class="card">
+        <h2>🔥 Top du jour</h2>
+        <p class="sub">Calculé en direct, remis à zéro à minuit. Pas de base de données : si le bot redémarre, la journée repart de zéro.</p>
+        <div class="fun-grid" id="dailyBoard"></div>
+      </section>
+
+      <section class="card">
+        <h2>👤 Qui déclenche le plus</h2>
+        <p class="sub">Seuls les pseudos des personnes qui ont accepté sont affichés — les autres apparaissent en « Anonyme #N ».</p>
+        <div class="board" id="userBoard"></div>
+      </section>
+
+      <p class="sub-note">ℹ️ Chaque personne reçoit un message privé à son premier déclenchement pour choisir si son pseudo peut être affiché.</p>
+    </main>
+
+    <script src="/stats-@@ASSET_VERSION@@.js"></script>
+  </body>
+</html>

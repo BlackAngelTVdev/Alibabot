@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/png" href="/favicon" />
+    <title>Connexion</title>
+    <link rel="stylesheet" href="/style-@@ASSET_VERSION@@.css" />
+  </head>
+  <body class="centered">
+    <main class="login-card">
+      <img id="botAvatar" class="brand-avatar large" alt="" />
+      <h1 id="botNameTitle">AliBaBot</h1>
+      <p>Espace réservé — connecte-toi pour gérer le bot.</p>
+      <form id="loginForm">
+        <label>
+          Nom d'utilisateur
+          <input id="username" type="text" autocomplete="username" required />
+        </label>
+        <label>
+          Mot de passe
+          <input id="password" type="password" autocomplete="current-password" required />
+        </label>
+        <button class="pill primary block" type="submit">Se connecter</button>
+        <div class="status" id="status"></div>
+      </form>
+    </main>
+    <script src="/login-@@ASSET_VERSION@@.js"></script>
+  </body>
+</html>

@@ -1,0 +1,31 @@
+services:
+  app:
+    image: node:20-slim
+    container_name: node_app
+    working_dir: /app
+    volumes:
+      - .:/app
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETUID
+      - SETGID
+      - NET_BIND_SERVICE
+      - NET_RAW
+    environment:
+      - ADMIN_USERNAME=${ADMIN_USERNAME}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - PUBLIC_URL=${PUBLIC_URL}
+    command: npm run prod
+    ports:
+      - "30000:30000"
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"

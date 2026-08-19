@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/png" href="/favicon" />
+    <title>AliBaBot - Gestion</title>
+    <link rel="stylesheet" href="/style-@@ASSET_VERSION@@.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="topbar">
+        <div class="brand">
+          <img id="botAvatar" class="brand-avatar" alt="" />
+          <div>
+            <h1 id="botNameTitle">AliBaBot</h1>
+            <p class="brand-sub">Panneau de gestion</p>
+          </div>
+        </div>
+        <button class="pill secondary" type="button" id="logoutBtn">Se déconnecter</button>
+      </header>
+
+      <nav class="tabs">
+        <div class="tab active" data-tab="reactions">💬 réactions</div>
+        <div class="tab" data-tab="status">🔄 status</div>
+        <div class="tab" data-tab="broadcast" id="broadcastTab">📣 broadcast</div>
+        <div class="tab" data-tab="perso">🎨 perso</div>
+        <div class="tab" data-tab="compte" id="compteTab">👥 compte</div>
+        <div class="tab" data-tab="logs" id="logsTab">📜 logs</div>
+      </nav>
+
+      <section class="tab-content active" id="tab-reactions">
+        <div class="card">
+          <h2>Réactions <span class="count-badge" id="reactionCount">0</span></h2>
+          <p class="sub">Chaque réaction a un mot déclencheur, la réponse que le bot doit donner (affichée en gros) et des variantes : quand un message contient un de ces mots, le bot répond. Clique sur une ligne pour la déplier.</p>
+
+          <form class="reaction-create" id="reactionCreateForm">
+            <input id="newTriggerInput" type="text" placeholder="Mot déclencheur (quoi, oui, hein…)" maxlength="40" autocomplete="off" required />
+            <input id="newResponseInput" type="text" placeholder="Réponse du bot (ex. : feur)" maxlength="200" autocomplete="off" required />
+            <button class="pill primary" type="submit">Créer la réaction</button>
+          </form>
+
+          <div class="reaction-list" id="reactionList"></div>
+          <div class="status" id="reactionStatus"></div>
+        </div>
+      </section>
+
+      <section class="tab-content" id="tab-broadcast">
+        <div class="card">
+          <h2>Broadcast <span class="count-badge" id="broadcastGuildCount">0 serveur</span></h2>
+          <p class="sub">Construis un embed (avec boutons si tu veux) et envoie-le sur <strong>tous les serveurs</strong> où le bot est présent. Il atterrit dans le salon système, sinon un salon « general », sinon le premier salon où le bot peut écrire.</p>
+
+          <div class="broadcast-grid">
+            <div class="broadcast-form">
+              <div class="broadcast-field">
+                <label for="bcTitle">Titre</label>
+                <input id="bcTitle" type="text" maxlength="256" placeholder="Titre de l'embed" />
+              </div>
+
+              <div class="broadcast-row2">
+                <div class="broadcast-field">
+                  <label for="bcColor">Couleur</label>
+                  <input id="bcColor" type="color" value="#38bdf8" />
+                </div>
+                <div class="broadcast-field">
+                  <label for="bcAuthor">Auteur</label>
+                  <input id="bcAuthor" type="text" maxlength="256" placeholder="Nom de l'auteur" />
+                </div>
+              </div>
+
+              <div class="broadcast-field">
+                <label for="bcDesc">Description</label>
+                <textarea id="bcDesc" maxlength="4096" rows="4" placeholder="Ta description…"></textarea>
+              </div>
+
+              <div class="broadcast-row2">
+                <div class="broadcast-field">
+                  <label for="bcImage">Image (URL)</label>
+                  <input id="bcImage" type="text" placeholder="https://…" />
+                </div>
+                <div class="broadcast-field">
+                  <label for="bcThumb">Miniature (URL)</label>
+                  <input id="bcThumb" type="text" placeholder="https://…" />
+                </div>
+              </div>
+
+              <div class="broadcast-field">
+                <label for="bcFooter">Pied de page</label>
+                <input id="bcFooter" type="text" maxlength="2048" placeholder="Texte du footer" />
+              </div>
+
+              <div class="broadcast-subsection">
+                <h3>Champs <button class="pill secondary small" type="button" id="addFieldBtn">+ champ</button></h3>
+                <div id="fieldList"></div>
+              </div>
+
+              <div class="broadcast-subsection">
+                <h3>Boutons <button class="pill secondary small" type="button" id="addButtonBtn">+ bouton</button></h3>
+                <p class="sub-note">Bouton « lien » : ouvre une URL. Autres styles : accusent juste le clic pour l'instant.</p>
+                <div id="buttonList"></div>
+              </div>
+
+              <div class="broadcast-field">
+                <label for="bcTarget">Où l'envoyer ?</label>
+                <select id="bcTarget">
+                  <option value="all">🌍 Tous les serveurs</option>
+                </select>
+                <p class="sub-note">Par défaut : tous les serveurs. Choisis un serveur précis pour tester sur un seul.</p>
+              </div>
+
+              <div class="actions">
+                <button class="pill secondary" type="button" id="clearBroadcastBtn">Tout effacer</button>
+                <button class="pill primary" type="button" id="sendBroadcastBtn">📣 Envoyer sur tous les serveurs</button>
+              </div>
+              <p class="sub-note">💡 Comptes normaux : <strong>1 envoi par jour</strong>. Les admins ne sont pas limités.</p>
+            </div>
+
+            <div class="broadcast-preview">
+              <h3>Aperçu</h3>
+              <div class="discord-preview" id="embedPreview"></div>
+              <div class="guild-list" id="guildList"></div>
+            </div>
+          </div>
+
+          <div class="status" id="broadcastStatus"></div>
+        </div>
+      </section>
+
+      <section class="tab-content" id="tab-status">
+        <div class="card">
+          <h2>Statuts du bot <span class="count-badge" id="statusCount">0</span></h2>
+          <p class="sub">Les statuts défilent toutes les 10 secondes. Ajoutes-en autant que tu veux.</p>
+          <p class="sub-note">La mention « développé par BlackAngelTVdev · https://github.com/BlackAngelTVdev » est toujours dans la rotation.</p>
+          <div class="status-list" id="statusList"></div>
+          <div class="actions">
+            <button class="pill secondary" type="button" id="addStatusBtn">+ Ajouter un statut</button>
+            <button class="pill primary" type="button" id="saveStatusBtn">Enregistrer les statuts</button>
+          </div>
+          <div class="status" id="statusMessage"></div>
+        </div>
+      </section>
+
+      <section class="tab-content" id="tab-compte">
+        <div class="card">
+          <h2>Comptes</h2>
+          <p class="sub" id="compteSub">Crée ou supprime des comptes pour les personnes qui gèrent le bot.</p>
+          <div class="user-list" id="userList"></div>
+          <form class="user-form" id="userForm">
+            <input id="newUsername" type="text" placeholder="Nouvel utilisateur" autocomplete="off" maxlength="32" required />
+            <input id="newPassword" type="password" placeholder="Mot de passe (min. 8 caractères)" autocomplete="new-password" required />
+            <button class="pill primary" type="submit">Ajouter</button>
+          </form>
+          <div class="status" id="userStatus"></div>
+        </div>
+      </section>
+
+      <section class="tab-content" id="tab-perso">
+        <div class="card">
+          <h2>Personnalisation du bot</h2>
+          <p class="sub">Changer la photo de profil et le pseudo du bot (visible sur Discord).</p>
+
+          <div class="perso-row">
+            <img class="avatar-preview" id="avatarPreview" alt="Aperçu" />
+            <div class="perso-info">
+              <p>Photo de profil : <span id="currentName">—</span></p>
+              <div class="actions">
+                <label class="pill secondary" for="avatarInput" style="cursor:pointer;">Choisir une image</label>
+                <input id="avatarInput" type="file" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none;" />
+                <button class="pill primary" type="button" id="saveAvatarBtn">Changer la pdp</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="perso-row">
+            <div class="perso-info">
+              <p>Pseudo du bot :</p>
+              <div class="add-row">
+                <input id="botNameInput" type="text" maxlength="32" placeholder="Nouveau pseudo" />
+                <button class="pill primary" type="button" id="saveNameBtn">Changer le pseudo</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="perso-row">
+            <div class="perso-info">
+              <p>Préfixe de commande :</p>
+              <div class="add-row">
+                <input id="botPrefixInput" type="text" maxlength="5" placeholder="!" />
+                <button class="pill primary" type="button" id="savePrefixBtn">Changer le préfixe</button>
+              </div>
+              <p class="sub-note">La commande <strong>[préfixe]stats</strong> (ex. : <code>!stats</code>) affiche un embed Discord avec le nombre de réponses du bot pour chaque réaction.</p>
+            </div>
+          </div>
+
+          <div class="perso-row">
+            <div class="perso-info">
+              <p class="sub-note">ℹ️ Discord ne permet pas aux bots de modifier leur bio (API réservée aux comptes utilisateurs). La mention de développement est donc toujours affichée via le statut du bot — elle apparaît en permanence dans la rotation, impossible à retirer.</p>
+            </div>
+          </div>
+          <div class="status" id="persoStatus"></div>
+        </div>
+      </section>
+
+      <section class="tab-content" id="tab-logs">
+        <div class="card">
+          <h2>Journal des actions <span class="count-badge" id="logCount">0</span></h2>
+          <p class="sub">Connexions, variantes, statuts, comptes et personnalisation — les 100 dernières actions.</p>
+          <div class="logs-table-wrap" id="logTableWrap"></div>
+        </div>
+      </section>
+    </main>
+
+    <script src="/app-@@ASSET_VERSION@@.js"></script>
+  </body>
+</html>
