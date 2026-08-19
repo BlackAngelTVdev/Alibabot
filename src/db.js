@@ -221,7 +221,7 @@ export function deleteExpiredSessions() {
 }
 
 const LOG_RETENTION_MS = 30 * 24 * 60 * 60 * 1000; // 30 jours
-const LOG_MAX_ROWS = 5000; // garde-fou : jamais plus de 5000 entrées, même très actif
+const LOG_MAX_ROWS = 1500; // garde-fou : jamais plus de 1500 entrées, même très actif
 
 export function addLog(username, action, details = "") {
   if (!database) {
