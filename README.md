@@ -1,89 +1,101 @@
-# AliBaBot
+# 🚀 AliBaBot
 
-Bot Discord en JavaScript qui répond automatiquement à des mots déclencheurs (par défaut : `quoi` → `feur`).
+![Stars](https://img.shields.io/github/stars/BlackAngelTVdev/Alibabot?style=for-the-badge&color=yellow)
+![Commits](https://img.shields.io/github/commit-activity/m/BlackAngelTVdev/Alibabot?style=for-the-badge&color=blue)
+![Issues](https://img.shields.io/github/issues/BlackAngelTVdev/Alibabot?style=for-the-badge&color=orange)
+![Forks](https://img.shields.io/github/forks/BlackAngelTVdev/Alibabot?style=for-the-badge&color=808080)
+![Last Commit](https://img.shields.io/github/last-commit/BlackAngelTVdev/Alibabot?style=for-the-badge&color=blue)
 
-## Installation
+> **Bot Discord qui répond « feur » aux « quoi » — avec un panneau web complet pour tout gérer : réactions, stats, broadcasts, rôles et signalements.**
+> *Exemple : tape `quoi` dans un salon et le bot répond `feur`. Ajoute tes propres mots déclencheurs depuis le panneau.*
 
-1. Installe Node.js 18+.
-2. Installe les dépendances :
+---
 
-```bash
-npm install
-```
+## 🧐 Aperçu
 
-3. Crée une variable d'environnement `DISCORD_TOKEN` avec le token de ton bot Discord.
-4. Active l'intent **Message Content** dans le portail développeur Discord, section **Bot** > **Privileged Gateway Intents**.
-5. Protège l'interface web : ajoute dans `.env` un identifiant et un mot de passe fort pour le **premier** compte :
+Le bot tourne sur Discord (réponses automatiques + commandes) et s'accompagne d'un **panneau web** de gestion, d'une **page publique de statistiques** (`/stats`) et d'un système de **récompense par rôle** pour le plus gros déclencheur de la journée.
 
-```
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=un_mot_de_passe_long_et_unique
-```
+📚 **Documentation complète** : [`docs/`](docs/00-index.md) — architecture, installation, commandes, panneau web, base de données et déploiement Docker.
 
-Ces identifiants créent le premier utilisateur dans la base SQLite (`users.db`) au premier démarrage. Ensuite, ajoute/supprime des utilisateurs directement depuis l'interface web (section **Utilisateurs**). Sans aucun utilisateur, le serveur refuse de démarrer (sécurité).
+## ✨ Fonctionnalités
 
-6. Lance le bot et l'interface web :
+- ✅ **Réactions personnalisables** : crée des mots déclencheurs (avec variantes) et leurs réponses directement dans le panneau.
+- ✅ **Statistiques + consentement** : chaque déclenchement est compté (par mot, par personne, par serveur), avec classements publics respectant l'anonymat choisi par chacun.
+- ✅ **Rôle « 👑 Déclencheur du Jour »** : la personne qui déclenche le plus dans la journée reçoit un rôle coloré, suivi en direct et activable/désactivable serveur par serveur.
+- ✅ **Broadcast visuel** : construit des embeds (avec boutons et champs) et envoie-les sur tous tes serveurs — limité à ses serveurs pour les membres, illimité pour l'admin.
+- ✅ **Signalements (`!!report`)** : un popup Discord pour remonter un problème, consultable dans le panneau.
+- ✅ **Connexion Discord OAuth** : les membres ne voient que les serveurs où ils sont réellement.
+- ✅ **Rapport annuel automatique** le 4 mai, statuts du bot en rotation, photo de profil modifiable, et plus encore.
 
-```bash
-npm start
-```
+## 🛠 Tech Stack
 
-7. Ouvre `http://localhost:30000` dans ton navigateur et connecte-toi avec tes identifiants. L'interface est organisée en onglets :
-   - **réactions** : liste les réactions du bot (mot déclencheur + réponse). Crée-en autant que tu veux (`quoi` → `feur`, `oui` → …, `hein` → …). En cliquant sur une réaction, la réponse du bot s'affiche en gros et tu peux ajouter/supprimer les variantes qui déclenchent cette réponse ;
-   - **status** : crée autant de statuts que tu veux (l'ajout est illimité) ;
-   - **compte** : chacun peut y changer son propre mot de passe ; la création et la suppression des autres comptes restent réservées à l'administrateur.
+| Technologie | Usage |
+| :--- | :--- |
+| ![JavaScript](https://img.shields.io/badge/JavaScript-Node.js-yellow?style=flat-square) | Logique principale (bot + serveur web) |
+| ![discord.js](https://img.shields.io/badge/discord.js-v14-blue?style=flat-square) | Interface Discord (messages, modals, boutons, rôles) |
+| ![sql.js](https://img.shields.io/badge/Database-sql.js-green?style=flat-square) | Stockage SQLite (fichier `users.db`) |
+| ![HTML/CSS](https://img.shields.io/badge/Frontend-HTML%2FCSS%2FJS-orange?style=flat-square) | Panneau web + page publique des stats |
+| ![Docker](https://img.shields.io/badge/Deploy-Docker-blue?style=flat-square) | Mise en production (docker-compose) |
 
-## Comportement
+## 🚀 Installation & Lancement
 
-Le bot répond à chaque message qui contient le mot déclencheur ou une de ses variantes. Par défaut, la réaction `quoi` → `feur` est pré-installée (avec toutes les variantes phonétiques historiques : `koi`, `kwa`, `koua`, `coi`…). La logique de détection est dans `src/reactions.js`, et les statuts du bot dans `src/statusConfig.js`. L'interface web permet de tout modifier en direct sur `http://localhost:30000`.
+1. **Cloner le projet**
+   ```bash
+   git clone https://github.com/BlackAngelTVdev/Alibabot.git
+   cd Alibabot
+   ```
+2. **Installer les dépendances**
+   ```bash
+   npm install
+   ```
+3. **Configurer les variables d'environnement**
+   Créez un fichier `.env` à la racine et ajoutez vos clés (voir [`docs/02-setup.md`](docs/02-setup.md) pour le détail) :
+   ```
+   DISCORD_TOKEN=ton_token_de_bot
+   ADMIN_USERNAME=admin
+   ADMIN_PASSWORD=un_mot_de_passe_fort
+   PUBLIC_URL=https://quoi.laxacube.ch
+   ```
+   Active les intents **Message Content** et **Server Members** dans le portail développeur Discord.
+4. **Lancer l'application**
+   ```bash
+   npm start
+   ```
+   Le panneau web est alors sur **http://localhost:30000**.
 
-Une **page publique** `/stats` (sans connexion) affiche les déclencheurs les plus utilisés, les personnes qui déclenchent le plus et le **top du jour** (calculé en mémoire, remis à zéro à minuit). À leur premier déclenchement, chaque personne reçoit un message privé avec des **boutons** pour choisir si son pseudo peut être affiché — sinon elle apparaît en « Anonyme #N » (le numéro lui est communiqué). On peut changer d'avis à tout moment avec `[préfixe]consent` (boutons aussi). Pour repartir de zéro (tout le monde sera re-demandé) : `npm run reset-consent` (arrête le bot, exécute le script, puis relance).
+## 📖 Utilisation
 
-Chaque réponse du bot est comptée par réaction. Le **4 mai** de chaque année, le bot envoie un **rapport annuel** sur tous les serveurs (total de déclenchements, top réaction, top personne, top serveur et remerciement) — une seule fois par an, même s'il redémarre ce jour-là.
-
-### 👑 Déclencheur du Jour
-
-Chaque jour, sur chaque serveur, la personne qui a le plus déclenché le bot reçoit le rôle **« 👑 Déclencheur du Jour »** (couleur or, affiché à part dans la liste des membres → pseudo coloré). Le rôle est créé automatiquement s'il n'existe pas. Au changement de jour (minuit), le nouveau champion est couronné et le comptage repart de zéro. Si le bot redémarre, le rôle est retiré partout et le comptage recommence (tout est en mémoire, rien en base). Si la hiérarchie des rôles bloque (rôle du bot trop bas, permission « Gérer les rôles » absente), le bot envoie un message privé au propriétaire du serveur (ou à un admin) pour expliquer quoi déplacer. Nécessite l'intent **Server Members** dans le portail développeur Discord.
-
-Le système peut être **désactivé** dans le panneau : l'onglet **👑 rôle** liste les serveurs (ceux où tu es, si tu as connecté ton compte Discord) avec un interrupteur chacun — les **membres** peuvent ainsi l'activer/désactiver sur leurs serveurs, et l'**admin** voit tous les serveurs + un interrupteur global dans l'onglet **perso**. Désactiver un serveur retire le rôle sur place et arrête le suivi ; réactiver recrée le rôle.
-
-Les commandes (préfixe modifiable dans l'onglet **perso**) :
-- `[préfixe]stats` (ex. : `!stats`) : envoie le lien vers la page publique des statistiques (`PUBLIC_URL`/stats) ;
-- `[préfixe]pp` (ex. : `!pp`) : envoie un lien de téléchargement de la photo de profil de l'auteur ; `[préfixe]pp @user` : celle du user taggé ;
-- `[préfixe]invite` (ex. : `!invite`) : envoie un lien pour inviter le bot sur un autre serveur ;
-- `[préfixe]consent` (ex. : `!consent`) : affiche son statut de consentement pour le classement public ; `[préfixe]consent oui` / `[préfixe]consent non` permet de changer d'avis à tout moment (ça marche aussi en message privé) ;
-- `[préfixe]help` (ex. : `!help`) : liste toutes les commandes avec le préfixe courant ;
-- `[préfixe]report` (ex. : `!report`) : ouvre un popup (modal) pour signaler un problème — le report est envoyé au panneau (onglet **📨 reports**), visible par l'admin et par les membres liés Discord sur les serveurs concernés ;
-- `[préfixe]codesource` (ex. : `!codesource`) : lien vers le code source du bot.
-
-### Seeder (données d'exemple)
-
-Pour remplir la base avec des réactions d'exemple (avec compteurs déjà incrémentés pour tester `!stats`) :
-
-```bash
-npm run seed        # additif : n'écrase jamais une réaction existante
-npm run seed -- --reset  # remplace TOUTES les réactions par les exemples (destructif)
-```
-
-Si tu vois l'erreur `Used disallowed intents`, c'est que l'intent **Message Content** n'est pas encore activé dans le portail Discord. Sans lui, le bot ne peut pas lire le contenu des messages et ne peut pas détecter `quoi`.
-
-### Connexion Discord des membres (broadcast limité à leurs serveurs)
-
-Pour que les comptes non-admin puissent envoyer des broadcasts **uniquement sur les serveurs dont ils sont membres**, chaque membre connecte son compte Discord :
-
-1. Dans le portail développeur Discord, ouvre ton application (celle du bot) → onglet **OAuth2** → **General** : note le **Client ID** et crée un **Client Secret**.
-2. Ajoute l'URL de redirection **`<PUBLIC_URL>/api/oauth/callback`** (ex. `https://quoi.laxacube.ch/api/oauth/callback`) dans **OAuth2 → Redirects**, ainsi que `http://localhost:30000/api/oauth/callback` pour tester en local.
-3. Renseigne dans `.env` :
+- Sur Discord : tape `quoi` pour voir le bot répondre `feur`, ou `!!help` pour lister toutes les commandes (`!!stats`, `!!pp`, `!!invite`, `!!report`, `!!consent`, `!!codesource`).
+- Dans le panneau : crée des réactions, des statuts, des broadcasts, gère les comptes et le rôle « Déclencheur du Jour ».
+- Page publique : `PUBLIC_URL/stats` pour les classements et le top du jour, sans connexion.
 
 ```
-DISCORD_CLIENT_ID=…
-DISCORD_CLIENT_SECRET=…
+// Petit snippet de code d'exemple
+const { findReaction } = await import('./src/reactions.js');
+findReaction('quoi'); // → { trigger: 'quoi', response: 'feur', count: … }
 ```
 
-Une fois connectés, les membres ne voient que leurs serveurs dans l'onglet **broadcast** (et l'envoi y est restreint, 1/jour). Les **admins** gardent l'accès complet sans connexion Discord.
+## 🤝 Contribution
 
-## Sécurité de l'interface web
+1. Forkez le projet
+2. Créez votre branche (`git checkout -b feature/AmazingFeature`)
+3. Commit (`git commit -m 'Add some AmazingFeature'`)
+4. Push (`git push origin feature/AmazingFeature`)
+5. Ouvrez une Pull Request
 
-L'interface (page + API) est protégée par une session : sans connexion, tout est refusé (les routes `/api/*` répondent `401`, les pages redirigent vers `/login`). La session expire après 12 h, et après 5 tentatives de connexion ratées l'adresse IP est bloquée 15 minutes (anti-brute-force).
+## 👤 Auteur
 
-Tout est stocké dans une base **SQLite** (`users.db`, via `sql.js` — aucun serveur de base de données requis) : les comptes, les réactions du bot et les statuts du bot. Les mots de passe sont hachés avec **scrypt** (sel unique par compte). Au premier démarrage, l'ancien contenu de `quoi-variants.json` et `bot-status.json` est migré automatiquement dans la base (les fichiers d'origine sont archivés en `.bak`), et les variantes de « quoi » deviennent la réaction `quoi` → `feur`. L'admin peut créer, modifier et supprimer des comptes (impossible de supprimer son propre compte ni le dernier compte).
+**BlackAngelTVdev**
+![Follow](https://img.shields.io/github/followers/BlackAngelTVdev?label=Follow%20Me&style=social)
+
+---
+## 📄 Licence
+
+Ce projet est sous licence :
+![GitHub License](https://img.shields.io/github/license/BlackAngelTVdev/Alibabot?style=flat-square&color=blue)
+
+### 🧑‍💻 Contributors
+
+Merci à toutes les personnes qui contribuent au projet.
+
+[![Contributors](https://contrib.rocks/image?repo=BlackAngelTVdev/Alibabot)](https://github.com/BlackAngelTVdev/Alibabot/graphs/contributors)
