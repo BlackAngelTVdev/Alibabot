@@ -38,6 +38,7 @@ Clé/valeur JSON. C'est là que vit la quasi-totalité de la configuration et de
 | `discord_links` | object | Par username panneau : `{ id, username, guilds: [{id, name}], linkedAt }` |
 | `reports` | array | Reports : `[{ id, guildId, guildName, channelName, authorId, authorName, content, createdAt, resolved }]` (200 max) |
 | `annual_report` | object/array | Année du dernier rapport annuel envoyé |
+| `maintenance_last_run` | string | Dernière maintenance nocturne (`YYYY-MM-DD`, heure locale) |
 | `quoi_variants` | array | Variantes historiques de « quoi » (migration) |
 
 ### `logs`
@@ -49,7 +50,7 @@ Clé/valeur JSON. C'est là que vit la quasi-totalité de la configuration et de
 | `action` | TEXT | Type d'action |
 | `details` | TEXT | Détails |
 
-Rétention : **30 jours** et **5000 entrées max** (nettoyage automatique à chaque écriture).
+Rétention : **30 jours** et **1500 entrées max** (nettoyage automatique à chaque écriture — le plus restrictif des deux s'applique).
 
 ## Données volatiles (hors base)
 

@@ -5,7 +5,7 @@ import { rmSync } from "node:fs";
 process.env.DB_PATH = `test-reactions-${process.pid}.db`;
 
 const { initDb, setSetting } = await import("../src/db.js");
-const { createReaction, findReaction, incrementReactionCount, readReactions, updateReaction } = await import("../src/reactions.js");
+const { createReaction, deleteReaction, findReaction, incrementReactionCount, readReactions, rebuildReactionIndex, updateReaction } = await import("../src/reactions.js");
 
 test.after(() => {
   rmSync(process.env.DB_PATH, { force: true });
@@ -21,11 +21,44 @@ test("repond selon le mot declencheur et sa reponse", async () => {
   assert.equal(findReaction("quoi ?")?.response, "feur");
   assert.equal(findReaction("tu dis koi")?.response, "feur");
   assert.equal(findReaction("kwa")?.trigger, "quoi");
-  assert.equal(findReaction("ouais bof")?.response, "??");
+  assert.equal(findReaction("bof ouais")?.response, "??");
   assert.equal(findReaction("bonjour"), null);
   assert.equal(findReaction("pourquoi"), null); // frontière de mot
   assert.equal(findReaction(""), null);
   assert.equal(findReaction(null), null);
+});
+
+test("seul le dernier mot du message déclenche", () => {
+  setSetting("reactions", [{ trigger: "quoi", response: "feur", variants: ["koi"] }]);
+
+  // Déclencheur en fin de message : ça déclenche.
+  assert.equal(findReaction("ca va ou quoi")?.response, "feur");
+  assert.equal(findReaction("tu dis koi")?.response, "feur");
+  assert.equal(findReaction("quoi ?")?.response, "feur");
+  assert.equal(findReaction("quoi...")?.response, "feur");
+  assert.equal(findReaction("quoi 😂")?.response, "feur");
+
+  // Déclencheur au début ou au milieu : ça ne déclenche PAS.
+  assert.equal(findReaction("quoi comment c'est possible"), null);
+  assert.equal(findReaction("quoi de neuf ?"), null);
+  assert.equal(findReaction("koi tu dis"), null);
+
+  // « ouais » est un variant de « oui » mais n'est pas en fin de message.
+  setSetting("reactions", [{ trigger: "oui", response: "??", variants: ["ouais"] }]);
+  assert.equal(findReaction("ouais bof"), null);
+  assert.equal(findReaction("bof ouais")?.response, "??");
+});
+
+test("un déclencheur à plusieurs mots doit être en fin de message", () => {
+  setSetting("reactions", [
+    { trigger: "ca va", response: "et toi ?", variants: [] },
+    { trigger: "quoi", response: "feur", variants: [] }
+  ]);
+
+  assert.equal(findReaction("ca va")?.response, "et toi ?");
+  assert.equal(findReaction("salut ca va")?.response, "et toi ?");
+  assert.equal(findReaction("ca va ou quoi")?.response, "feur"); // le dernier mot gagne
+  assert.equal(findReaction("ca va pas"), null);
 });
 
 test("le mot declencheur lui-meme declenche la reponse", () => {
@@ -74,4 +107,30 @@ test("le compteur s'incrémente et survit aux modifications", () => {
   // Un trigger inconnu ne doit ni planter ni créer d'entrée.
   assert.equal(incrementReactionCount("inconnu"), null);
   assert.equal(readReactions().length, 1);
+});
+
+test("l'index de recherche reste synchronisé à chaque modification", () => {
+  setSetting("reactions", [{ trigger: "quoi", response: "feur", variants: ["koi"] }]);
+  assert.equal(findReaction("koi")?.response, "feur");
+
+  // Modification : l'ancien variant ne doit plus matcher, le nouveau oui.
+  updateReaction("quoi", { variants: ["kwa"] });
+  assert.equal(findReaction("kwa")?.response, "feur");
+  assert.equal(findReaction("koi"), null);
+
+  // Création : le nouveau déclencheur matche immédiatement.
+  createReaction("hein", "quoi ?");
+  assert.equal(findReaction("hein")?.response, "quoi ?");
+
+  // Suppression : plus rien ne matche.
+  deleteReaction("quoi");
+  assert.equal(findReaction("kwa"), null);
+
+  // Écriture directe en base : l'index se régénère tout seul au prochain appel.
+  setSetting("reactions", [{ trigger: "oui", response: "non", variants: [] }]);
+  assert.equal(findReaction("oui")?.response, "non");
+
+  // rebuildReactionIndex est appelable explicitement (maintenance nocturne).
+  const index = rebuildReactionIndex();
+  assert.ok(index.wordToReaction.has("oui"));
 });

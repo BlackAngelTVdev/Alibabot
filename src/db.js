@@ -9,6 +9,13 @@ const scryptKeyLength = 64;
 
 let database = null;
 
+// Invalidation de caches dépendant d'une clé de settings (ex. : index des réactions).
+const settingWatchers = new Set();
+
+export function watchSetting(key, onChanged) {
+  settingWatchers.add({ key, onChanged });
+}
+
 function hashPassword(password) {
   const salt = randomBytes(16).toString("hex");
   const hash = scryptSync(password, salt, scryptKeyLength).toString("hex");
@@ -173,6 +180,12 @@ export function setSetting(key, value) {
     [key, JSON.stringify(value)]
   );
   persistDatabase();
+
+  for (const watcher of settingWatchers) {
+    if (watcher.key === key) {
+      watcher.onChanged();
+    }
+  }
 }
 
 export function createSessionRow(token, username, expiresAt) {
@@ -218,6 +231,19 @@ export function deleteExpiredSessions() {
 
   database.run("DELETE FROM sessions WHERE expires_at < ?", [Date.now()]);
   persistDatabase();
+}
+
+// Maintenance nocturne : met à jour les statistiques du planificateur SQLite (ANALYZE)
+// et compacte la base (VACUUM), puis réécrit le fichier. À lancer quand le bot est peu utilisé.
+export function runDbMaintenance() {
+  if (!database) {
+    return false;
+  }
+
+  database.run("ANALYZE");
+  database.run("VACUUM");
+  persistDatabase();
+  return true;
 }
 
 const LOG_RETENTION_MS = 30 * 24 * 60 * 60 * 1000; // 30 jours

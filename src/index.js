@@ -6,10 +6,21 @@ import { consentActionRow, createReportFromModal, handleCodeSourceCommand, handl
 import { recordDailyTrigger } from "./dailyStats.js";
 import { ensureChampionRole, ensureChampionRoleEverywhere, isChampionRoleEnabled, recordChampionTrigger, refreshGuildChampion, removeChampionRoleEverywhere, resetChampionTracking, startDailyChampionLoop } from "./dailyChampion.js";
 import { initDb } from "./db.js";
+import { scheduleMaintenance } from "./maintenance.js";
 import { findReaction, incrementReactionCount } from "./reactions.js";
 import { ensureUserStat, getUserStat, isPendingConsent, recordServerTrigger, recordUserTrigger, setUserConsent } from "./userStats.js";
 import { readBotStatusConfig } from "./statusConfig.js";
 import { startWebServer } from "./webServer.js";
+
+// Résilience réseau : une erreur transitoire (timeout, coupure…) ne doit jamais tuer le processus.
+// On loggue l'erreur et la boucle de reconnexion / le gateway de discord.js reprennent la main.
+process.on("unhandledRejection", (reason) => {
+  console.error("[unhandledRejection]", reason instanceof Error ? reason.stack : reason);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("[uncaughtException]", error?.stack ?? error);
+});
 
 let statusIndex = 0;
 
@@ -49,6 +60,9 @@ const client = new Client({
 
 setBotClient(client);
 
+// Les erreurs du client (réseau, gateway…) sont logguées sans tuer le processus.
+client.on("error", (error) => console.error("Erreur du client Discord :", error.message));
+
 client.once("ready", () => {
   console.log(`Connecté en tant que ${client.user.tag} — ${client.guilds.cache.size} serveur(s) en cache`);
   updateStatus(client);
@@ -65,6 +79,9 @@ client.once("ready", () => {
     .catch((error) => console.error("Nettoyage du rôle Déclencheur du Jour :", error.message));
   resetChampionTracking();
   startDailyChampionLoop();
+
+  // Maintenance nocturne (00h00) : index des déclencheurs, ANALYZE + VACUUM, sessions.
+  scheduleMaintenance();
 
   // Déclencheur du Jour : on crée le rôle sur tous les serveurs dès le démarrage,
   // pour qu'il existe même avant le premier déclenchement.
@@ -292,13 +309,48 @@ client.on("interactionCreate", async (interaction) => {
   }
 });
 
-client.login(token).catch((error) => {
-  if (error?.message?.includes("Used disallowed intents")) {
-    console.error(
-      "Discord refuse la connexion : un intent privilégié n'est pas activé. Dans le portail développeur Discord, onglet Bot > Privileged Gateway Intents, active « Message Content Intent » ET « Server Members Intent », puis relance le bot."
-    );
-    process.exit(1);
-  }
+// Connexion à Discord avec nouvelles tentatives automatiques (backoff exponentiel) :
+// un simple timeout réseau ne doit plus laisser le bot hors ligne définitivement.
+let loginInProgress = false;
 
-  throw error;
+async function loginWithRetry() {
+  if (loginInProgress) {
+    return;
+  }
+  loginInProgress = true;
+
+  try {
+    let attempt = 0;
+
+    for (;;) {
+      try {
+        await client.login(token);
+        return;
+      } catch (error) {
+        if (error?.message?.includes("Used disallowed intents")) {
+          console.error(
+            "Discord refuse la connexion : un intent privilégié n'est pas activé. Dans le portail développeur Discord, onglet Bot > Privileged Gateway Intents, active « Message Content Intent » ET « Server Members Intent », puis relance le bot."
+          );
+          process.exit(1);
+        }
+
+        attempt += 1;
+        const delay = Math.min(1000 * 2 ** Math.min(attempt, 6), 60_000); // 2 s → 64 s max
+        console.error(
+          `Connexion Discord échouée (tentative ${attempt}) : ${error?.message ?? error}. Nouvelle tentative dans ${Math.round(delay / 1000)} s…`
+        );
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  } finally {
+    loginInProgress = false;
+  }
+}
+
+loginWithRetry();
+
+// Si le gateway se déconnecte (réseau coupé, etc.), on relance la connexion.
+client.on("shardDisconnect", () => {
+  console.error("Déconnexion du gateway Discord — reconnexion en cours…");
+  loginWithRetry();
 });

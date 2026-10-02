@@ -2,6 +2,7 @@ services:
   app:
     image: node:20-slim
     container_name: node_app
+    restart: unless-stopped
     working_dir: /app
     volumes:
       - .:/app

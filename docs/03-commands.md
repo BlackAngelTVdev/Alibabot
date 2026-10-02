@@ -53,3 +53,5 @@ En plus des commandes, le bot répond automatiquement aux **déclencheurs** :
 - Toute réaction créée dans le panneau (onglet **réactions**) avec ses variantes.
 
 Le mot déclencheur lui-même compte toujours (plus besoin de l'ajouter en variante).
+
+**Seul le dernier mot du message compte** : `ca va ou quoi` déclenche, `quoi comment c'est possible` ne déclenche pas. La ponctuation et les emojis après le mot (`quoi ?`, `quoi...`, `quoi 😂`) n'empêchent rien.

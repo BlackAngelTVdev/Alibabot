@@ -2,8 +2,10 @@
 
 ## 1. Réactions (mots déclencheurs)
 
-Le cœur du bot : un message contenant un déclencheur (ou une variante) → le bot répond.
+Le cœur du bot : si le **dernier mot** du message est un déclencheur (ou une variante) → le bot répond.
 
+- **Seule la fin du message compte** : `ca va ou quoi` déclenche (`quoi`), mais `quoi comment c'est possible` ne déclenche pas (`possible`). Un déclencheur à plusieurs mots (ex. `ca va`) doit aussi être en fin de message.
+- La ponctuation et les emojis après le mot n'empêchent rien : `quoi ?`, `quoi...` et `quoi 😂` déclenchent.
 - Stockées en base (`settings.reactions`), gérables dans l'onglet **réactions**.
 - Chaque réaction a : `trigger` (mot principal), `response`, `variants` (autres mots), `count` (nombre de réponses).
 - Le mot déclencheur lui-même compte toujours.
@@ -73,3 +75,14 @@ La personne qui a **le plus déclenché aujourd'hui** sur un serveur porte le r�
 ## 9. Favicon = avatar du bot
 
 - Le site (panneau + pages publiques) utilise l'**avatar actuel du bot** comme favicon : `/favicon` redirige vers le CDN Discord, donc si on change la pdp, le favicon suit.
+
+## 10. Index des déclencheurs + maintenance nocturne (00h00)
+
+- **Index de recherche en mémoire** (`src/reactions.js`) : le bot matche les déclencheurs avec **une map mot → réaction** construite une seule fois, au lieu de relire la base à chaque message. Chaque message est découpé en mots et seuls les derniers mots sont testés (quelques accès à la map) — les messages ordinaires ne coûtent quasiment rien.
+- **Invalidation automatique** : toute écriture de `settings.reactions` (panneau, seeder, migration) invalide l'index ; il se régénère au prochain message. `rebuildReactionIndex()` le reconstruit à la demande.
+- **Job de maintenance nocturne** (`src/maintenance.js`), lancé à **00h00 locale** (et au démarrage si pas déjà passé aujourd'hui) :
+  - reconstruit l'index des déclencheurs depuis la base ;
+  - `ANALYZE` (stats du planificateur SQLite) + `VACUUM` (compactage) + réécriture du fichier ;
+  - purge les sessions expirées ;
+  - journalise le passage dans les logs du panneau (`action = maintenance`).
+- Marqueur `settings.maintenance_last_run` (jour local) pour éviter de tourner deux fois le même jour.

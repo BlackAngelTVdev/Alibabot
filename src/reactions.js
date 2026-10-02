@@ -1,12 +1,8 @@
-import { getSetting, setSetting } from "./db.js";
+import { getSetting, setSetting, watchSetting } from "./db.js";
 
 const MAX_TRIGGER_LENGTH = 40;
 const MAX_RESPONSE_LENGTH = 200;
 const MAX_VARIANT_LENGTH = 60;
-
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
 
 function normalizeWord(value) {
   return String(value)
@@ -74,6 +70,52 @@ export function readReactions() {
 
   return normalizeReactions(stored);
 }
+
+// ————— Index de recherche (en mémoire) —————
+// Le bot cherche le déclencheur sur CHAQUE message reçu : on préconstruit un index
+// (une map mot → réaction) pour éviter de relire la base à chaque message. L'index est
+// invalidé automatiquement à chaque écriture de la clé « reactions » (via watchSetting)
+// et rafraîchi par le job de maintenance nocturne (src/maintenance.js).
+//
+// Seule la FIN du message compte : le déclencheur doit être le dernier mot
+// (« ca va ou quoi » déclenche, « quoi comment c'est possible » non).
+
+let matchIndex = null;
+
+function buildMatchIndex(reactions) {
+  const wordToReaction = new Map();
+  const words = new Set();
+
+  for (const reaction of reactions) {
+    for (const word of [reaction.trigger, ...reaction.variants]) {
+      const key = normalizeWord(word);
+      if (key && !words.has(key)) {
+        words.add(key);
+        wordToReaction.set(key, reaction);
+      }
+    }
+  }
+
+  // Nombre de mots du plus long déclencheur (ex. « ca va » → 2) : on teste les
+  // suffixes du message du plus long au plus court.
+  let maxWordTokens = 1;
+  for (const word of words) {
+    maxWordTokens = Math.max(maxWordTokens, word.split(/\s+/).length);
+  }
+
+  return { wordToReaction, maxWordTokens };
+}
+
+// Reconstruit l'index depuis la base (appelé par la maintenance nocturne).
+export function rebuildReactionIndex() {
+  matchIndex = buildMatchIndex(readReactions());
+  return matchIndex;
+}
+
+// Toute écriture de la clé « reactions » (API, seeder, migration…) invalide l'index.
+watchSetting("reactions", () => {
+  matchIndex = null;
+});
 
 function persistReactions(reactions) {
   setSetting("reactions", reactions);
@@ -143,17 +185,21 @@ export function findReaction(messageContent) {
     return null;
   }
 
-  const normalized = normalizeWord(messageContent);
+  if (!matchIndex) {
+    rebuildReactionIndex();
+  }
 
-  for (const reaction of readReactions()) {
-    const words = [reaction.trigger, ...reaction.variants];
+  // Découpage en mots (la ponctuation et les emojis servent de séparateurs) :
+  // « quoi ? » → ["quoi"], « c'est quoi » → ["c", "est", "quoi"].
+  const tokens = normalizeWord(messageContent)
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
 
-    const matched = words.some((word) => {
-      const pattern = new RegExp(`\\b${escapeRegExp(word)}\\b`, "u");
-      return pattern.test(normalized);
-    });
-
-    if (matched) {
+  // Seul le dernier mot du message peut déclencher (du plus long au plus court,
+  // pour que les déclencheurs à plusieurs mots comme « ca va » gagnent).
+  for (let size = Math.min(matchIndex.maxWordTokens, tokens.length); size >= 1; size -= 1) {
+    const reaction = matchIndex.wordToReaction.get(tokens.slice(-size).join(" "));
+    if (reaction) {
       return reaction;
     }
   }

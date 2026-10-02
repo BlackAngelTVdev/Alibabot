@@ -33,7 +33,7 @@ Le projet tourne **dans un seul processus** : le bot Discord et le serveur web s
 1. `client.on("messageCreate")` reçoit le message (`src/index.js`).
 2. Si c'est un MP → gestion du consentement.
 3. Si c'est une commande (`help`, `stats`, `pp`, `invite`, `consent`, `codesource`, `report`) → `src/commands.js`.
-4. Sinon, `findReaction(message.content)` cherche si le message contient un déclencheur (`src/reactions.js`).
+4. Sinon, `findReaction(message.content)` cherche si le **dernier mot** du message est un déclencheur (`src/reactions.js`).
 5. Si oui :
    - `incrementReactionCount` → compteur de la réaction (base) ;
    - `recordServerTrigger` → compteur par serveur (base) ;
